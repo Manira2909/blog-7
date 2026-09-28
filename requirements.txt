@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+reportlab
+fastapi-mail
+python-dotenv

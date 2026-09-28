@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Blog - Premium</title>
+<style>
+body{font-family:Arial; background:#f5f5f5; margin:0; padding:20px;}
+.card{background:white; padding:20px; border-radius:12px; margin-bottom:15px; box-shadow:0 2px 8px #0001;}
+.btn{padding:8px 15px; border:none; border-radius:6px; cursor:pointer; margin:2px;}
+.btn-blue{background:#2563eb; color:white;}.btn-green{background:#16a34a; color:white;}
+.btn-red{background:#dc2626; color:white;}.btn-yellow{background:#eab308; color:black;}
+input, textarea{width:95%; padding:10px; margin:5px 0; border:1px solid #ddd; border-radius:6px;}
+.plans{display:flex; gap:10px; flex-wrap:wrap;}
+.plan{border:2px solid #ddd; padding:15px; border-radius:10px; flex:1; min-width:180px; text-align:center;}
+.plan.pro{border-color:gold; background:#fffbeb;}
+.tag{padding:2px 8px; border-radius:10px; font-size:12px; background:#e0e7ff;}
+.error{color:red; font-weight:bold;}.success{color:green; font-weight:bold;}
+#posts img{max-width:100%; border-radius:8px; margin-top:10px;}
+.comment-box{margin-top:10px; background:#f9fafb; padding:10px; border-radius:8px;}
+.comment-item{border-bottom:1px solid #eee; padding:5px 0; font-size:14px;}
+.navbar{display:flex; justify-content:space-between; align-items:center;}
+.bell-wrap{position:relative; display:inline-block;}
+#bellCount{display:none; position:absolute; top:-5px; right:-5px; background:red; color:white; font-size:12px; padding:2px 6px; border-radius:50%;}
+#bellDropdown{display:none; position:absolute; right:0; top:35px; width:320px; max-height:400px; overflow-y:auto; background:white; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:1000;}
+.pub-opt{margin:10px 0; padding:10px; background:#f8fafc; border-radius:8px;}
+.pub-opt label{margin-right:15px; cursor:pointer;}
+#scheduleFields{display:none; margin-top:10px;}
+#scheduleFields input{width:auto; display:inline-block; margin-right:10px;}
+</style>
+</head>
+<body>
+
+<div class="navbar">
+<h1>📝 Blog - Subscription System</h1>
+<div class="bell-wrap">
+  <button id="bellBtn" style="font-size:24px; background:none; border:none; cursor:pointer;">🔔<span id="bellCount">0</span></button>
+  <div id="bellDropdown">
+    <div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">
+      <b>Notifications</b><button id="markAllRead" style="font-size:12px;">Mark all read</button>
+    </div>
+    <div id="notifList"></div>
+  </div>
+</div>
+</div>
+
+<div class="card">
+<h3>🔐 Auth</h3>
+<input id="username" placeholder="Username">
+<input id="email" placeholder="Email (register only)">
+<input id="password" type="password" placeholder="Password">
+<button class="btn btn-blue" onclick="register()">Register</button>
+<button class="btn btn-green" onclick="login()">Login</button>
+<button class="btn btn-red" onclick="logout()">Logout</button>
+<p id="authStatus"></p>
+</div>
+
+<div class="card">
+<h3>💳 Subscription Plans</h3>
+<button class="btn btn-blue" onclick="seedPlans()">Seed Plans</button>
+<button class="btn btn-blue" onclick="loadPlans()">Load Plans</button>
+<button class="btn btn-yellow" onclick="myPlan()">My Current Plan</button>
+<button class="btn btn-yellow" onclick="myHistory()">My Invoices</button>
+<button onclick="location.href='/auth/login/google'">Continue with Google</button>
+<button onclick="location.href='/auth/login/facebook'">Continue with Facebook</button>
+<div id="plans" class="plans"></div>
+<div id="myPlanInfo"></div>
+</div>
+
+<div class="card">
+<h3>✍️ Create Post</h3>
+<input id="title" placeholder="Post Title">
+<textarea id="content" placeholder="Post Content"></textarea>
+<input type="file" id="image">
+<!-- NEW: Publish options -->
+<div class="pub-opt">
+  <b>Publish Options:</b><br><br>
+  <label><input type="radio" name="pub" value="publish_now" checked> 🚀 Publish Now</label>
+  <label><input type="radio" name="pub" value="draft"> 📝 Save as Draft</label>
+  <label><input type="radio" name="pub" value="schedule"> ⏰ Schedule Post</label>
+  <div id="scheduleFields">
+    <input type="date" id="schedule_date">
+    <input type="time" id="schedule_time">
+  </div>
+</div>
+<button class="btn btn-green" onclick="createPost()">Create Post</button>
+<p id="postStatus"></p>
+</div>
+
+<div class="card">
+<h3>📰 All Posts</h3>
+<button class="btn btn-blue" onclick="loadPosts()">Refresh Posts</button>
+<div id="posts"></div>
+</div>
+
+<script>
+const API = "";
+let token = localStorage.getItem("token") || "";
+function headers(isForm=false){
+  let h = {};
+  if(token) h["Authorization"] = "Bearer "+token;
+  if(!isForm) h["Content-Type"] = "application/json";
+  return h;
+}
+function showAuth(){
+  document.getElementById("authStatus").innerHTML = token? `<span class="success">Logged in ✅</span>` : `<span class="error">Not logged in</span>`;
+  if(token) loadNotifications();
+}
+showAuth();
+
+// NEW: toggle schedule fields
+document.querySelectorAll('input[name="pub"]').forEach(r => {
+  r.onchange = () => {
+    document.getElementById('scheduleFields').style.display =
+      document.querySelector('input[name="pub"]:checked').value === 'schedule'? 'block' : 'none';
+  };
+});
+
+async function register(){
+  let res = await fetch(`${API}/auth/register`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({username:username.value, email:email.value, password:password.value})});
+  let data = await res.json();
+  alert(res.ok? "Register success! Login pannu ma" : "Failed: "+(data.detail||JSON.stringify(data)));
+}
+async function login(){
+  let form = new FormData(); form.append("username", username.value); form.append("password", password.value);
+  let res = await fetch(`${API}/auth/login`, {method:"POST", body:form});
+  let data = await res.json();
+  if(data.access_token){ token=data.access_token; localStorage.setItem("token",token); showAuth(); alert("Login success ma!"); }
+  else alert(JSON.stringify(data));
+}
+function logout(){ localStorage.removeItem("token"); token=""; showAuth(); }
+
+async function seedPlans(){ let res = await fetch(`${API}/subscription/seed-plans`, {method:"POST"}); alert(JSON.stringify(await res.json())); loadPlans(); }
+async function loadPlans(){
+  let res = await fetch(`${API}/subscription/plans`); let plans = await res.json(); let html="";
+  plans.forEach(p=>{ html+=`<div class="plan ${p.name=='Pro'?'pro':''}"><h4>${p.name}</h4><p><b>₹${p.price}</b></p><button class="btn btn-green" onclick="subscribe(${p.id})">Subscribe</button></div>`; });
+  document.getElementById("plans").innerHTML=html;
+}
+async function subscribe(id){
+  let res = await fetch(`${API}/subscription/subscribe/${id}`, {method:"POST", headers:headers()});
+  let data = await res.json();
+  document.getElementById("myPlanInfo").innerHTML = res.ok? `<p class="success">${data.msg}</p>` : `<p class="error">${data.detail}</p>`;
+  if(res.ok) loadNotifications();
+}
+async function myPlan(){ let res = await fetch(`${API}/subscription/my-plan`, {headers:headers()}); document.getElementById("myPlanInfo").innerHTML=`<pre>${JSON.stringify(await res.json(),null,2)}</pre>`; }
+async function myHistory(){ let res = await fetch(`${API}/subscription/my-history`, {headers:headers()}); let data=await res.json(); document.getElementById("myPlanInfo").innerHTML="<h4>Invoices:</h4>"+data.map(b=>`<p>Plan ${b.plan_id} - ₹${b.amount} - ${new Date(b.created_at).toLocaleString()}</p>`).join(""); }
+
+async function createPost(){
+  let form = new FormData();
+  form.append("title", title.value);
+  form.append("content", content.value);
+  if(image.files[0]) form.append("image", image.files[0]);
+  // NEW: publish options
+  let action = document.querySelector('input[name="pub"]:checked').value;
+  form.append("action", action);
+  if(action === "schedule"){
+    let d = document.getElementById("schedule_date").value;
+    let t = document.getElementById("schedule_time").value;
+    if(!d ||!t){ document.getElementById("postStatus").innerHTML = `<span class="error">Date & time kudunga ma</span>`; return; }
+    form.append("scheduled_at", d + "T" + t + ":00");
+  }
+  let res = await fetch(`${API}/posts/`, {method:"POST", headers:{"Authorization":"Bearer "+token}, body:form});
+  let data = await res.json();
+  document.getElementById("postStatus").innerHTML = res.ok? `<span class="success">Post created! Status: ${data.status} ✅</span>` : `<span class="error">${data.detail||JSON.stringify(data)}</span>`;
+  if(res.ok) loadPosts();
+}
+async function loadPosts(){
+  let res = await fetch(`${API}/posts/`); let posts = await res.json(); let html="";
+  posts.slice().reverse().forEach(p=>{
+    let img = p.image_path || '';
+    html+=`<div class="card"><h4>${p.title} <span class="tag">#${p.id}</span></h4><p>${p.content}</p>${img?`<img src="/${img}">`:''}<br>
+    <button class="btn btn-blue" onclick="likePost(${p.id})">👍 Like</button>
+    <button class="btn btn-yellow" onclick="toggleComment(${p.id})">💬 Comment</button>
+    <button class="btn btn-red" onclick="deletePost(${p.id})">Delete</button>
+    <div id="c-${p.id}" class="comment-box" style="display:none;"><div id="clist-${p.id}"></div><input id="cin-${p.id}" placeholder="Write a comment..."><button class="btn btn-green" onclick="sendComment(${p.id})">Send</button></div></div>`;
+  });
+  document.getElementById("posts").innerHTML=html;
+}
+async function likePost(id){ let res=await fetch(`${API}/posts/${id}/like`,{method:"POST",headers:headers()}); let d=await res.json(); if(!res.ok) alert(d.detail); else loadPosts(); }
+function toggleComment(id){ let box=document.getElementById(`c-${id}`); box.style.display=box.style.display=="none"?"block":"none"; if(box.style.display=="block") loadComments(id); }
+async function loadComments(id){ let res=await fetch(`${API}/posts/${id}/comments`); if(!res.ok) return; let cs=await res.json(); document.getElementById(`clist-${id}`).innerHTML=cs.map(c=>`<div class="comment-item"><b>User ${c.user_id}:</b> ${c.content}</div>`).join("")||"<small>No comments</small>"; }
+async function sendComment(id){
+  let text=document.getElementById(`cin-${id}`).value; if(!text) return alert("Comment type pannu ma");
+  let res=await fetch(`${API}/posts/${id}/comment`,{method:"POST", headers:headers(), body:JSON.stringify({content:text})});
+  let d=await res.json(); if(!res.ok) alert(d.detail||JSON.stringify(d)); else {document.getElementById(`cin-${id}`).value=""; loadComments(id);}
+}
+async function deletePost(id){ if(!confirm("Delete?"))return; let res=await fetch(`${API}/posts/${id}`,{method:"DELETE",headers:headers()}); loadPosts(); }
+
+// Bell logic
+async function loadNotifications(){
+  if(!token) return;
+  let res=await fetch(`${API}/notifications/`,{headers:headers()}); if(!res.ok) return;
+  let data=await res.json(); let badge=document.getElementById("bellCount");
+  badge.style.display=data.unread_count>0?"inline-block":"none"; badge.textContent=data.unread_count;
+  document.getElementById("notifList").innerHTML=data.notifications.map(n=>`<div style="padding:10px;border-bottom:1px solid #eee;background:${n.is_read?'#fff':'#f0f7ff'};cursor:pointer" onclick="markRead(${n.id})"><div style="font-size:14px">${n.message}</div><small>${n.type}</small></div>`).join("")||"<p style='padding:10px'>No notifications</p>";
+}
+async function markRead(id){ await fetch(`${API}/notifications/${id}/read`,{method:"POST",headers:headers()}); loadNotifications(); }
+document.getElementById("bellBtn").onclick=()=>{ let dd=document.getElementById("bellDropdown"); dd.style.display=dd.style.display=="none"?"block":"none"; if(dd.style.display=="block") loadNotifications(); };
+document.getElementById("markAllRead").onclick=async(e)=>{ e.stopPropagation(); await fetch(`${API}/notifications/read-all`,{method:"POST",headers:headers()}); loadNotifications(); };
+setInterval(loadNotifications,10000);
+loadPosts(); loadPlans();
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Panel - Billing & Validation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{font-family:Arial; background:#f1f5f9; padding:20px; margin:0;}
+.card{background:white; padding:20px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 5px #0001; overflow-x:auto;}
+table{width:100%; border-collapse:collapse; min-width:900px;}
+th,td{border:1px solid #ddd; padding:10px; text-align:left; font-size:14px;}
+th{background:#1e293b; color:white; position:sticky; top:0;}
+.exceed{background:#fee2e2; color:#dc2626; font-weight:bold; padding:5px 10px; border-radius:6px;}
+.ok{background:#dcfce7; color:#16a34a; padding:5px 10px; border-radius:6px;}
+.btn{padding:8px 15px; border:none; border-radius:5px; cursor:pointer; background:#2563eb; color:white; margin:2px;}
+.search{padding:8px 12px; border:1px solid #ddd; border-radius:6px; width:250px; margin:10px 0;}
+.badge{background:#e0e7ff; padding:2px 8px; border-radius:10px; font-size:12px;}
+input{padding:8px; border:1px solid #ddd; border-radius:6px; margin:2px;}
+</style>
+</head>
+<body>
+<h1>🔧 Admin Panel - Django Admin Style</h1>
+<button class="btn" onclick="loadDashboard()">🔄 Load Billing & Validation Data</button>
+<button class="btn" style="background:#dc2626" onclick="loadExceeded()">⚠️ Show Only Exceeded Users</button>
+<button class="btn" style="background:#16a34a" onclick="toggleAuto()">⏱️ Auto-refresh: <span id="autoStat">OFF</span></button>
+<br>
+<input class="search" id="searchBox" placeholder="🔍 Search username / email..." onkeyup="filterTable()">
+
+<div class="card">
+<h3>📧 Send Email Notification</h3>
+<input id="emailUserId" placeholder="User ID" style="width:100px">
+<input id="emailMsg" placeholder="Message..." style="width:300px">
+<button class="btn" style="background:#7c3aed" onclick="sendEmail()">Send</button>
+<p id="emailStatus"></p>
+</div>
+
+<div class="card" id="data"><p>Loading...</p></div>
+
+<script>
+let allUsers = [];
+let autoTimer = null;
+const token = localStorage.getItem("token") || "";
+const authH = {"Authorization":"Bearer "+token, "Content-Type":"application/json"};
+
+async function loadDashboard(){
+  try{
+    let res = await fetch("/admin/dashboard");
+    if(!res.ok) throw new Error("API "+res.status);
+    allUsers = await res.json();
+    renderTable(allUsers);
+  }catch(e){
+    document.getElementById("data").innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
+  }
+}
+function renderTable(users){
+  if(!users.length){ document.getElementById("data").innerHTML = "<p>No users found ma.</p>"; return; }
+  let html = `<h3>All Users - Billing Date & Validation (${users.length})</h3><table id="mainTable">
+  <tr><th>User</th><th>Plan</th><th>Billing Start</th><th>Billing End</th><th>Last Billing Date</th><th>Txn ID</th><th>Posts</th><th>Validation Message</th><th>Invoices</th></tr>`;
+  users.forEach(u=>{
+    let isExceed = (u.validation_message||'').includes('EXCEEDED');
+    let invHtml = (u.all_invoices||[]).map(i=>{
+      if(!i.pdf || i.pdf=='-') return `${i.date} - ₹${i.amount}`;
+      return `<a href="/${i.pdf}" target="_blank">${i.date} - ₹${i.amount}</a>`;
+    }).join('<br>') || '-';
+    html+=`<tr>
+      <td><b>${u.username}</b><br><small>${u.email}</small><br><span class="badge">ID: ${u.user_id}</span></td>
+      <td>${u.current_plan} (${u.plan_price})</td>
+      <td>${u.billing_start||'-'}</td>
+      <td>${u.billing_end||'-'}</td>
+      <td><b>${u.last_billing_date||'-'}</b></td>
+      <td><small>${u.last_transaction_id||'-'}</small></td>
+      <td><b>${u.total_posts??0}</b></td>
+      <td><span class="${isExceed?'exceed':'ok'}">${u.validation_message||'OK'}</span></td>
+      <td>${invHtml}</td>
+    </tr>`;
+  });
+  html+=`</table>`;
+  document.getElementById("data").innerHTML=html;
+}
+async function loadExceeded(){
+  let res = await fetch("/admin/exceeded-users");
+  let data = await res.json();
+  let users = data.exceeded_users || [];
+  alert(users.length + " users exceeded limits ma!");
+  renderTable(users);
+}
+function filterTable(){
+  let q = document.getElementById("searchBox").value.toLowerCase();
+  let filtered = allUsers.filter(u=> (u.username||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q));
+  renderTable(filtered);
+}
+function toggleAuto(){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; document.getElementById("autoStat").innerText="OFF"; }
+  else{ autoTimer=setInterval(loadDashboard, 10000); document.getElementById("autoStat").innerText="ON (10s)"; }
+}
+async function sendEmail(){
+  let uid = document.getElementById("emailUserId").value;
+  let msg = document.getElementById("emailMsg").value;
+  if(!uid || !msg) return alert("User ID & message kodu ma");
+  let res = await fetch(`/admin/send-email/${uid}?message=${encodeURIComponent(msg)}`, {method:"POST", headers: authH});
+  document.getElementById("emailStatus").innerText = JSON.stringify(await res.json());
+}
+loadDashboard();
+</script>
+</body>
+</html>
